@@ -1,0 +1,5 @@
+{
+  "name": "茗星配服务平台",
+  "description": "茗星配仓储运输管理服务平台，提供卸货排队、仓库叫号、运输计划及仓库自提收货管理功能。",
+  "requestFramePermissions": ["camera"]
+}
