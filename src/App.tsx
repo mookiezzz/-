@@ -28,7 +28,7 @@ import { cn } from './lib/utils';
 
 // --- Types ---
 type View = 'home' | 'unloading' | 'transport' | 'calling' | 'pickup';
-type PickupStep = 'verify' | 'detail' | 'sign' | 'exception';
+type PickupStep = 'list' | 'verify' | 'detail' | 'sign' | 'exception';
 
 // --- Components ---
 
@@ -246,7 +246,7 @@ export default function App() {
     </motion.div>
   );
 
-  const [pickupStep, setPickupStep] = useState<PickupStep>('verify');
+  const [pickupStep, setPickupStep] = useState<PickupStep>('list');
   const [pickupCode, setPickupCode] = useState('');
   const [exceptionReason, setExceptionReason] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
@@ -272,12 +272,14 @@ export default function App() {
     >
       <SubPageHeader 
         title={
+          pickupStep === 'list' ? "自提订单列表" :
           pickupStep === 'verify' ? "自提验证" : 
           pickupStep === 'detail' ? "交接详情" : 
           pickupStep === 'sign' ? "确认签收" : "异常上报"
         } 
         onBack={() => {
-          if (pickupStep === 'verify') setCurrentView('home');
+          if (pickupStep === 'list') setCurrentView('home');
+          else if (pickupStep === 'verify') setPickupStep('list');
           else if (pickupStep === 'detail') setPickupStep('verify');
           else if (pickupStep === 'sign') setPickupStep('detail');
           else if (pickupStep === 'exception') setPickupStep('sign');
@@ -285,6 +287,38 @@ export default function App() {
       />
 
       <div className="p-4 pb-24 flex flex-col gap-4">
+        {pickupStep === 'list' && (
+          <div className="flex flex-col gap-3">
+            {[
+              { owner: '货主A', code: '551253', name: '安徽省合肥市瑶海区新站广场1016', date: '2025-10-28' },
+              { owner: '货主B', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05' },
+              { owner: '货主C', code: '773452', name: '浙江省杭州市西湖区西溪路', date: '2025-12-12' },
+            ].map((order, idx) => (
+              <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{order.owner}</span>
+                  <span className="text-xs text-gray-400">{order.date}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-gray-800">{order.name}</span>
+                  <span className="text-xs text-gray-500 mt-1">收货人编码: {order.code}</span>
+                </div>
+              </div>
+            ))}
+            
+            {/* Fixed Bottom Button for List View */}
+            <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto px-4 z-40">
+              <button 
+                onClick={() => setPickupStep('verify')}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-xl shadow-blue-200 flex items-center justify-center gap-2"
+              >
+                <ScanLine className="w-5 h-5" />
+                自提签收
+              </button>
+            </div>
+          </div>
+        )}
+
         {pickupStep === 'verify' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex flex-col items-center mb-6">
@@ -319,6 +353,16 @@ export default function App() {
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">基本信息</h4>
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-gray-400 text-xs">货主</span>
+                    <span className="text-gray-800 font-medium">货主A</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-gray-400 text-xs">发货仓库</span>
+                    <span className="text-gray-800 font-medium">合肥1号仓</span>
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-gray-400 text-xs">订单编号</span>
                   <span className="text-gray-800 font-bold break-all">OMSSO202602251622601328918</span>
@@ -415,11 +459,12 @@ export default function App() {
             <div className="flex flex-col gap-3 mt-4">
               <button 
                 onClick={() => {
-                  alert('签收成功！');
-                  setCurrentView('home');
-                  setPickupStep('verify');
-                  setPickupCode('');
-                  setPhotos([]);
+                  if (window.confirm('确认完成签收交接吗？')) {
+                    alert('签收成功！');
+                    setPickupStep('list');
+                    setPickupCode('');
+                    setPhotos([]);
+                  }
                 }}
                 className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200"
               >
