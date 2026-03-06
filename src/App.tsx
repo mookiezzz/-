@@ -19,8 +19,6 @@ import {
   CheckCircle2,
   PackageSearch,
   Camera,
-  Signature,
-  AlertTriangle,
   ScanLine
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,89 +26,9 @@ import { cn } from './lib/utils';
 
 // --- Types ---
 type View = 'home' | 'unloading' | 'transport' | 'calling' | 'pickup';
-type PickupStep = 'list' | 'verify' | 'detail' | 'sign' | 'exception';
+type PickupStep = 'list' | 'verify' | 'scan' | 'detail' | 'sign';
 
 // --- Components ---
-
-const SignaturePad = ({ onSave }: { onSave: (data: string) => void }) => {
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = React.useState(false);
-
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-  }, []);
-
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e ? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = ('touches' in e ? e.touches[0].clientY : e.clientY) - rect.top;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e ? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = ('touches' in e ? e.touches[0].clientY : e.clientY) - rect.top;
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 overflow-hidden touch-none">
-        <canvas
-          ref={canvasRef}
-          width={400}
-          height={200}
-          className="w-full h-48 cursor-crosshair"
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-        />
-      </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={clear} className="text-sm text-gray-500 px-3 py-1 border border-gray-200 rounded-lg">清除</button>
-        <button onClick={() => {
-          const canvas = canvasRef.current;
-          if (canvas) onSave(canvas.toDataURL());
-        }} className="text-sm bg-blue-600 text-white px-3 py-1 rounded-lg">确认签字</button>
-      </div>
-    </div>
-  );
-};
 
 const Header = ({ userId = "1959" }: { userId?: string }) => (
   <div className="relative h-64 w-full overflow-hidden">
@@ -238,7 +156,7 @@ export default function App() {
       />
 
       <FeatureCard 
-        title="仓库自提收货"
+        title="仓库自提签收"
         subtitle="自提订单现场交接验证"
         icon={PackageSearch}
         onClick={() => setCurrentView('pickup')}
@@ -248,8 +166,8 @@ export default function App() {
 
   const [pickupStep, setPickupStep] = useState<PickupStep>('list');
   const [pickupCode, setPickupCode] = useState('');
-  const [exceptionReason, setExceptionReason] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -274,15 +192,16 @@ export default function App() {
         title={
           pickupStep === 'list' ? "自提订单列表" :
           pickupStep === 'verify' ? "自提验证" : 
+          pickupStep === 'scan' ? "扫码验证" : 
           pickupStep === 'detail' ? "交接详情" : 
           pickupStep === 'sign' ? "确认签收" : "异常上报"
         } 
         onBack={() => {
           if (pickupStep === 'list') setCurrentView('home');
           else if (pickupStep === 'verify') setPickupStep('list');
-          else if (pickupStep === 'detail') setPickupStep('verify');
+          else if (pickupStep === 'scan') setPickupStep('verify');
+          else if (pickupStep === 'detail') setPickupStep('scan');
           else if (pickupStep === 'sign') setPickupStep('detail');
-          else if (pickupStep === 'exception') setPickupStep('sign');
         }} 
       />
 
@@ -290,13 +209,23 @@ export default function App() {
         {pickupStep === 'list' && (
           <div className="flex flex-col gap-3">
             {[
-              { owner: '货主A', code: '551253', name: '安徽省合肥市瑶海区新站广场1016', date: '2025-10-28' },
-              { owner: '货主B', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05' },
-              { owner: '货主C', code: '773452', name: '浙江省杭州市西湖区西溪路', date: '2025-12-12' },
+              { owner: '货主A', code: '551253', name: '安徽省合肥市瑶海区新站广场1016', date: '2025-10-28', status: '已出库' },
+              { owner: '货主B', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05', status: '已签收' },
+              { owner: '货主C', code: '773452', name: '浙江省杭州市西湖区西溪路', date: '2025-12-12', status: '已分配' },
             ].map((order, idx) => (
-              <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2">
+              <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2 relative overflow-hidden">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{order.owner}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{order.owner}</span>
+                    <span className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                      order.status === '已出库' ? "bg-orange-50 text-orange-600 border border-orange-100" :
+                      order.status === '已签收' ? "bg-green-50 text-green-600 border border-green-100" :
+                      "bg-blue-50 text-blue-600 border border-blue-100"
+                    )}>
+                      {order.status}
+                    </span>
+                  </div>
                   <span className="text-xs text-gray-400">{order.date}</span>
                 </div>
                 <div className="flex flex-col">
@@ -325,8 +254,8 @@ export default function App() {
               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                 <ScanLine className="w-8 h-8 text-blue-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-800">请输入取件码</h3>
-              <p className="text-sm text-gray-400">验证客户提供的6位取件码</p>
+              <h3 className="text-lg font-bold text-gray-800">请输入自提码</h3>
+              <p className="text-sm text-gray-400">验证客户提供的6位自提码</p>
             </div>
             <input 
               type="text" 
@@ -338,13 +267,54 @@ export default function App() {
             />
             <button 
               onClick={() => {
-                if (pickupCode.length === 6) setPickupStep('detail');
+                if (pickupCode.length === 6) setPickupStep('scan');
               }}
               disabled={pickupCode.length !== 6}
               className="mt-6 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all"
             >
-              验证并进入交接
+              验证并进入扫码
             </button>
+          </div>
+        )}
+
+        {pickupStep === 'scan' && (
+          <div className="flex flex-col items-center gap-6">
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 w-full flex flex-col items-center">
+              <div className="relative w-64 h-64 bg-gray-900 rounded-2xl overflow-hidden flex items-center justify-center">
+                {/* Simulated Scanner UI */}
+                <div className="absolute inset-0 border-2 border-blue-500/30"></div>
+                <div className="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
+                <div className="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
+                <div className="absolute bottom-4 left-4 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
+                <div className="absolute bottom-4 right-4 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
+                
+                {/* Scanning Animation Line */}
+                <motion.div 
+                  animate={{ top: ['10%', '90%', '10%'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="absolute left-4 right-4 h-0.5 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] z-10"
+                />
+                
+                <ScanLine className="w-24 h-24 text-blue-500/20" />
+              </div>
+              
+              <div className="mt-8 text-center">
+                <h3 className="text-lg font-bold text-gray-800">请扫描自提二维码</h3>
+                <p className="text-sm text-gray-400 mt-2 px-4">请将客户出示的自提二维码置于框内进行扫描验证</p>
+              </div>
+              
+              <button 
+                onClick={() => setPickupStep('detail')}
+                className="mt-8 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+              >
+                <ScanLine className="w-5 h-5" />
+                模拟扫描成功
+              </button>
+            </div>
+            
+            <p className="text-xs text-gray-400 text-center px-8">
+              提示：如果无法扫描，请尝试调整光线或距离，或返回重新输入自提码。
+            </p>
           </div>
         )}
 
@@ -448,73 +418,67 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-              <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Signature className="w-5 h-5 text-blue-500" />
-                电子签字
-              </h4>
-              <SignaturePad onSave={(data) => console.log('Signature saved', data)} />
-            </div>
-
             <div className="flex flex-col gap-3 mt-4">
               <button 
-                onClick={() => {
-                  if (window.confirm('确认完成签收交接吗？')) {
-                    alert('签收成功！');
-                    setPickupStep('list');
-                    setPickupCode('');
-                    setPhotos([]);
-                  }
-                }}
-                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200"
+                onClick={() => setShowConfirmModal(true)}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 active:opacity-90"
               >
                 确认完成签收
               </button>
-              <button 
-                onClick={() => setPickupStep('exception')}
-                className="w-full py-3 flex items-center justify-center gap-2 text-red-500 font-medium border border-red-100 rounded-xl"
-              >
-                <AlertTriangle className="w-4 h-4" />
-                提报异常
-              </button>
             </div>
-          </div>
-        )}
-
-        {pickupStep === 'exception' && (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              异常原因提报
-            </h4>
-            <textarea 
-              rows={6}
-              placeholder="请详细描述异常情况（如：货物破损、数量不符、规格错误等）..."
-              value={exceptionReason}
-              onChange={(e) => setExceptionReason(e.target.value)}
-              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-            />
-            <div className="mt-4 p-3 bg-red-50 rounded-xl flex gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-              <p className="text-xs text-red-600">提报异常后，该订单将进入异常处理流程，需相关负责人审核。</p>
-            </div>
-            <button 
-              onClick={() => {
-                if (exceptionReason) {
-                  alert('异常已提报');
-                  setCurrentView('home');
-                  setPickupStep('verify');
-                  setExceptionReason('');
-                }
-              }}
-              disabled={!exceptionReason}
-              className="mt-6 w-full py-4 bg-red-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-red-200 disabled:opacity-50"
-            >
-              提交异常
-            </button>
           </div>
         )}
       </div>
+
+      {/* Custom Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowConfirmModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle2 className="w-10 h-10 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">确认签收</h3>
+                <p className="text-gray-500 text-sm mb-8">您确定已完成所有货物的交接并确认签收吗？</p>
+                
+                <div className="flex flex-col w-full gap-3">
+                  <button 
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setPickupStep('list');
+                      setPickupCode('');
+                      setPhotos([]);
+                      // Optional: show a success toast instead of alert
+                    }}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-100"
+                  >
+                    确定完成
+                  </button>
+                  <button 
+                    onClick={() => setShowConfirmModal(false)}
+                    className="w-full py-3 text-gray-400 font-medium"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 
