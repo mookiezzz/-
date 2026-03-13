@@ -19,14 +19,18 @@ import {
   CheckCircle2,
   PackageSearch,
   Camera,
-  ScanLine
+  ScanLine,
+  AlertTriangle,
+  KeyRound,
+  Keyboard,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 
 // --- Types ---
 type View = 'home' | 'unloading' | 'transport' | 'calling' | 'pickup';
-type PickupStep = 'list' | 'verify' | 'scan' | 'detail' | 'sign';
+type PickupStep = 'list' | 'verify' | 'scan' | 'manual_entry' | 'order_manual_entry' | 'match_list' | 'order_view' | 'detail' | 'sign';
 
 // --- Components ---
 
@@ -165,9 +169,16 @@ export default function App() {
   );
 
   const [pickupStep, setPickupStep] = useState<PickupStep>('list');
+  const [pickupTab, setPickupTab] = useState<'all' | 'mine'>('all');
+  const [pickupFilter, setPickupFilter] = useState('全部');
+  const [ownerFilter, setOwnerFilter] = useState('全部货主');
+  const [warehouseFilter, setWarehouseFilter] = useState('全部仓库');
   const [pickupCode, setPickupCode] = useState('');
+  const [deliveryCode, setDeliveryCode] = useState('');
+  const [orderCode, setOrderCode] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,6 +204,10 @@ export default function App() {
           pickupStep === 'list' ? "自提订单列表" :
           pickupStep === 'verify' ? "自提验证" : 
           pickupStep === 'scan' ? "扫码验证" : 
+          pickupStep === 'manual_entry' ? "手动录入单号" :
+          pickupStep === 'order_manual_entry' ? "手动录入订单" :
+          pickupStep === 'match_list' ? "匹配订单列表" :
+          pickupStep === 'order_view' ? "订单详情" :
           pickupStep === 'detail' ? "交接详情" : 
           pickupStep === 'sign' ? "确认签收" : "异常上报"
         } 
@@ -200,7 +215,13 @@ export default function App() {
           if (pickupStep === 'list') setCurrentView('home');
           else if (pickupStep === 'verify') setPickupStep('list');
           else if (pickupStep === 'scan') setPickupStep('verify');
-          else if (pickupStep === 'detail') setPickupStep('scan');
+          else if (pickupStep === 'manual_entry') setPickupStep('verify');
+          else if (pickupStep === 'order_manual_entry') setPickupStep('match_list');
+          else if (pickupStep === 'match_list') {
+            setPickupStep('verify');
+          }
+          else if (pickupStep === 'order_view') setPickupStep('match_list');
+          else if (pickupStep === 'detail') setPickupStep('match_list');
           else if (pickupStep === 'sign') setPickupStep('detail');
         }} 
       />
@@ -208,15 +229,83 @@ export default function App() {
       <div className="p-4 pb-24 flex flex-col gap-4">
         {pickupStep === 'list' && (
           <div className="flex flex-col gap-3">
-            {[
-              { owner: '货主A', code: '551253', name: '安徽省合肥市瑶海区新站广场1016', date: '2025-10-28', status: '已出库' },
-              { owner: '货主B', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05', status: '已签收' },
-              { owner: '货主C', code: '773452', name: '浙江省杭州市西湖区西溪路', date: '2025-12-12', status: '已分配' },
-            ].map((order, idx) => (
+            {/* Tabs */}
+            <div className="flex bg-gray-100 p-1 rounded-xl mb-2">
+              <button 
+                onClick={() => setPickupTab('all')}
+                className={cn(
+                  "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                  pickupTab === 'all' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500"
+                )}
+              >
+                所有订单
+              </button>
+              <button 
+                onClick={() => setPickupTab('mine')}
+                className={cn(
+                  "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                  pickupTab === 'mine' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500"
+                )}
+              >
+                我的签收
+              </button>
+            </div>
+
+            {pickupTab === 'all' && (
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <select 
+                  value={pickupFilter}
+                  onChange={(e) => setPickupFilter(e.target.value)}
+                  className="bg-white border border-gray-200 rounded-lg px-2 py-2 text-[11px] font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option>全部</option>
+                  <option>已出库</option>
+                  <option>已分配</option>
+                  <option>待交接</option>
+                </select>
+                <select 
+                  value={ownerFilter}
+                  onChange={(e) => setOwnerFilter(e.target.value)}
+                  className="bg-white border border-gray-200 rounded-lg px-2 py-2 text-[11px] font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option>全部货主</option>
+                  <option>货主A</option>
+                  <option>货主B</option>
+                  <option>货主C</option>
+                </select>
+                <select 
+                  value={warehouseFilter}
+                  onChange={(e) => setWarehouseFilter(e.target.value)}
+                  className="bg-white border border-gray-200 rounded-lg px-2 py-2 text-[11px] font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option>全部仓库</option>
+                  <option>合肥1号仓</option>
+                  <option>南京2号仓</option>
+                  <option>杭州3号仓</option>
+                </select>
+              </div>
+            )}
+
+            {(pickupTab === 'all' ? [
+              { owner: '货主A', warehouse: '合肥1号仓', code: '551253', name: '安徽省合肥市瑶海区新站广场1016', date: '2025-10-28', status: '已出库' },
+              { owner: '货主B', warehouse: '南京2号仓', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05', status: '已签收' },
+              { owner: '货主C', warehouse: '杭州3号仓', code: '773452', name: '浙江省杭州市西湖区西溪路', date: '2025-12-12', status: '已分配' },
+            ] : [
+              { owner: '货主B', warehouse: '南京2号仓', code: '662341', name: '江苏省南京市江宁区百家湖', date: '2025-11-05', status: '已签收' },
+            ])
+            .filter(order => {
+              const tabMatch = pickupTab === 'mine' || true; // Tab already filters data
+              const statusMatch = pickupFilter === '全部' || order.status === pickupFilter;
+              const ownerMatch = ownerFilter === '全部货主' || order.owner === ownerFilter;
+              const warehouseMatch = warehouseFilter === '全部仓库' || order.warehouse === warehouseFilter;
+              return statusMatch && ownerMatch && warehouseMatch;
+            })
+            .map((order, idx) => (
               <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2 relative overflow-hidden">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{order.owner}</span>
+                    <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{order.warehouse}</span>
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded font-medium",
                       order.status === '已出库' ? "bg-orange-50 text-orange-600 border border-orange-100" :
@@ -230,7 +319,9 @@ export default function App() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-gray-800">{order.name}</span>
-                  <span className="text-xs text-gray-500 mt-1">收货人编码: {order.code}</span>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-gray-500">收货人编码: {order.code}</span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -249,31 +340,86 @@ export default function App() {
         )}
 
         {pickupStep === 'verify' && (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex flex-col items-center mb-6">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                <ScanLine className="w-8 h-8 text-blue-600" />
+          <div className="flex flex-col gap-4">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex flex-col items-center mb-6">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                  <KeyRound className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">请输入自提码</h3>
+                <p className="text-sm text-gray-400">验证客户提供的6位自提码</p>
               </div>
-              <h3 className="text-lg font-bold text-gray-800">请输入自提码</h3>
-              <p className="text-sm text-gray-400">验证客户提供的6位自提码</p>
+              <input 
+                type="text" 
+                maxLength={6}
+                placeholder="000000"
+                value={pickupCode}
+                onChange={(e) => setPickupCode(e.target.value)}
+                className="w-full text-center text-3xl font-bold tracking-[0.5em] py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              
+              <div className="grid grid-cols-2 gap-3 mt-6">
+                <button 
+                  onClick={() => {
+                    if (pickupCode.length === 6) setPickupStep('manual_entry');
+                  }}
+                  disabled={pickupCode.length !== 6}
+                  className="py-4 bg-white border-2 border-blue-600 text-blue-600 rounded-xl font-bold text-base shadow-sm disabled:opacity-50 disabled:border-gray-200 disabled:text-gray-400 transition-all flex items-center justify-center gap-2"
+                >
+                  <Keyboard className="w-5 h-5" />
+                  验证并录入
+                </button>
+                <button 
+                  onClick={() => {
+                    if (pickupCode.length === 6) setPickupStep('scan');
+                  }}
+                  disabled={pickupCode.length !== 6}
+                  className="py-4 bg-blue-600 text-white rounded-xl font-bold text-base shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                >
+                  <ScanLine className="w-5 h-5" />
+                  验证并扫码
+                </button>
+              </div>
             </div>
-            <input 
-              type="text" 
-              maxLength={6}
-              placeholder="000000"
-              value={pickupCode}
-              onChange={(e) => setPickupCode(e.target.value)}
-              className="w-full text-center text-3xl font-bold tracking-[0.5em] py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button 
-              onClick={() => {
-                if (pickupCode.length === 6) setPickupStep('scan');
-              }}
-              disabled={pickupCode.length !== 6}
-              className="mt-6 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all"
-            >
-              验证并进入扫码
-            </button>
+
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed font-medium">
+                自提码验证通过后需扫描或录入验证配货单号（支持一维码和二维码）
+              </p>
+            </div>
+          </div>
+        )}
+
+        {pickupStep === 'manual_entry' && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex flex-col items-center mb-6">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                  <Keyboard className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">录入配货单号</h3>
+                <p className="text-sm text-gray-400">请输入配货单号进行验证</p>
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="请输入配货单号"
+                  value={deliveryCode}
+                  onChange={(e) => setDeliveryCode(e.target.value)}
+                  className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-lg"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  if (deliveryCode.trim()) setPickupStep('match_list');
+                }}
+                disabled={!deliveryCode.trim()}
+                className="mt-6 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all"
+              >
+                确认并验证
+              </button>
+            </div>
           </div>
         )}
 
@@ -304,7 +450,7 @@ export default function App() {
               </div>
               
               <button 
-                onClick={() => setPickupStep('detail')}
+                onClick={() => setPickupStep('match_list')}
                 className="mt-8 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
               >
                 <ScanLine className="w-5 h-5" />
@@ -318,11 +464,189 @@ export default function App() {
           </div>
         )}
 
-        {pickupStep === 'detail' && (
+        {pickupStep === 'match_list' && (
+          <div className="flex flex-col gap-4">
+            {/* Common Store Info Header */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-gray-400">货主</span>
+                      <span className="text-xs font-bold text-gray-700">货主A</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-gray-400">发货仓库</span>
+                      <span className="text-xs font-bold text-gray-700">合肥1号仓</span>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-gray-50">
+                    <p className="text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">当前匹配门店</p>
+                    <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                      551253 / 安徽省合肥市瑶海区新站广场1016
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <div className="w-1 h-4 bg-blue-600 rounded-full"></div>
+                可交接订单
+                <span className="text-xs font-normal text-gray-400 ml-auto">共 2 笔</span>
+              </h4>
+              <div className="space-y-3">
+                {[
+                  { id: 'OMSSO202602251622601328918', outboundId: 'SO120260313000556', highlight: true },
+                  { id: 'OMSSO202602251622601328919', outboundId: 'SO120260313000557', highlight: true },
+                ].map((order) => (
+                  <button 
+                    key={order.id} 
+                    onClick={() => {
+                      setSelectedOrder({ ...order, store: '551253 / 安徽省合肥市瑶海区新站广场1016' });
+                      setPickupStep('order_view');
+                    }}
+                    className="w-full text-left p-3 bg-blue-50/50 border border-blue-100 rounded-xl relative overflow-hidden active:bg-blue-100 transition-colors"
+                  >
+                    <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-bl-lg font-bold">可交接</div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-medium">订单</span>
+                        <span className="text-sm font-bold text-blue-600 underline decoration-blue-200 underline-offset-4">
+                          {order.id}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">出库</span>
+                        <span className="text-xs font-medium text-gray-600">{order.outboundId}</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-red-100">
+              <h4 className="font-bold text-red-600 mb-3 flex items-center gap-2">
+                <div className="w-1 h-4 bg-red-600 rounded-full"></div>
+                待交接订单
+                <span className="text-xs font-normal text-red-400 ml-auto">共 1 笔</span>
+              </h4>
+              
+              <div className="mb-3 p-2 bg-red-50 rounded-lg flex items-start gap-2 border border-red-100">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-red-600 font-medium">该订单未在当前拣货明细表里，请确认</p>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { id: 'OMSSO202602251622601328920', outboundId: 'SO120260313000558', highlight: false },
+                ].map((order) => (
+                  <button 
+                    key={order.id} 
+                    onClick={() => {
+                      setSelectedOrder({ ...order, store: '551253 / 安徽省合肥市瑶海区新站广场1016' });
+                      setPickupStep('order_view');
+                    }}
+                    className="w-full text-left p-3 bg-red-50/30 border border-red-100 rounded-xl active:bg-red-50 transition-colors"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">订单</span>
+                        <span className="text-sm font-bold text-red-600 underline decoration-red-200 underline-offset-4">
+                          {order.id}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">出库</span>
+                        <span className="text-xs font-medium text-gray-600">{order.outboundId}</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setPickupStep('order_manual_entry')}
+                  className="flex-1 py-4 bg-white text-blue-600 border-2 border-blue-600 rounded-xl font-bold text-base active:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Keyboard className="w-5 h-5" />
+                  录入订单
+                </button>
+                <button 
+                  onClick={() => setPickupStep('scan')}
+                  className="flex-1 py-4 bg-white text-blue-600 border-2 border-blue-600 rounded-xl font-bold text-base active:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ScanLine className="w-5 h-5" />
+                  添加订单
+                </button>
+              </div>
+              <button 
+                onClick={() => setPickupStep('detail')}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-xl shadow-blue-200 active:opacity-90"
+              >
+                继续签收
+              </button>
+            </div>
+          </div>
+        )}
+
+        {pickupStep === 'order_manual_entry' && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex flex-col items-center mb-6">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                  <Keyboard className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">录入订单号</h3>
+                <p className="text-sm text-gray-400">请输入订单号进行验证匹配</p>
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="请输入订单号"
+                  value={orderCode}
+                  onChange={(e) => setOrderCode(e.target.value)}
+                  className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-lg"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  if (orderCode.trim()) setPickupStep('match_list');
+                }}
+                disabled={!orderCode.trim()}
+                className="mt-6 w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all"
+              >
+                确认并录入
+              </button>
+            </div>
+          </div>
+        )}
+
+        {pickupStep === 'order_view' && (
           <div className="flex flex-col gap-4">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-              <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">基本信息</h4>
+              <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">订单详情</h4>
               <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400 text-xs">订单编号</span>
+                  <span className="text-gray-800 font-bold break-all">{selectedOrder?.id}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400 text-xs">出库单号</span>
+                  <span className="text-gray-800 font-bold break-all">{selectedOrder?.outboundId}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400 text-xs">门店信息</span>
+                  <span className="text-gray-800 font-medium leading-relaxed">{selectedOrder?.store}</span>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
                     <span className="text-gray-400 text-xs">货主</span>
@@ -333,31 +657,49 @@ export default function App() {
                     <span className="text-gray-800 font-medium">合肥1号仓</span>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-gray-400 text-xs">订单编号</span>
-                  <span className="text-gray-800 font-bold break-all">OMSSO202602251622601328918</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-gray-400 text-xs">客户源单号</span>
-                  <span className="text-gray-800 font-medium">BO2026022500017288</span>
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <span className="text-gray-400 text-xs">收货人编码</span>
-                    <span className="text-gray-800 font-medium">551253</span>
+                    <span className="text-gray-400 text-xs">送货方式</span>
+                    <span className="text-gray-800 font-medium">自提</span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-gray-400 text-xs">预计配送日期</span>
-                    <span className="text-gray-800 font-medium">2025-10-28</span>
+                    <span className="text-gray-400 text-xs">状态</span>
+                    <span className="text-blue-600 font-bold">{selectedOrder?.highlight ? '待交接' : '处理中'}</span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-gray-400 text-xs">收货人名称</span>
-                  <span className="text-gray-800 font-medium leading-relaxed">安徽省合肥市瑶海区新站广场1016</span>
+                  <span className="text-gray-400 text-xs">创建时间</span>
+                  <span className="text-gray-800 font-medium">2025-10-28 14:30:22</span>
                 </div>
               </div>
             </div>
 
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+              <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">物料清单</h4>
+              <div className="space-y-3">
+                {[
+                  { name: '工业级传感器 A-01', qty: '10' },
+                  { name: '精密连接线组', qty: '50' },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                    <span className="text-sm text-gray-700">{item.name}</span>
+                    <span className="text-sm font-bold text-gray-900">x{item.qty}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setPickupStep('match_list')}
+              className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg shadow-lg mt-4"
+            >
+              确认返回
+            </button>
+          </div>
+        )}
+
+        {pickupStep === 'detail' && (
+          <div className="flex flex-col gap-4">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <h4 className="font-bold text-gray-800 mb-4 border-b border-gray-50 pb-2">交接物料明细</h4>
               <div className="space-y-4">
@@ -394,10 +736,13 @@ export default function App() {
         {pickupStep === 'sign' && (
           <div className="flex flex-col gap-4">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-              <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Camera className="w-5 h-5 text-blue-500" />
-                现场拍照
-              </h4>
+              <div className="mb-4">
+                <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-blue-500" />
+                  现场拍照
+                </h4>
+                <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">要求拍摄司机车牌照片、冷藏冷冻货物照片、常温货物照片</p>
+              </div>
               <div className="grid grid-cols-3 gap-3">
                 {photos.map((p, i) => (
                   <div key={i} className="aspect-square rounded-xl overflow-hidden border border-gray-100 relative">
